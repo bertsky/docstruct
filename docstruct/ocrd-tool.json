@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "git_url": "https://github.com/bertsky/docstruct",
+  "tools": {
+    "ocrd-docstruct": {
+      "executable": "ocrd-docstruct",
+      "categories": ["Layout analysis"],
+      "description": "Parsing page-level text regions with headings and reading order, create a dummy logical structMap",
+      "steps": ["layout/analysis"],
+      "parameters": {
+        "mode": {
+          "type": "string",
+          "enum": ["enmap", "dfg"],
+          "default": "dfg",
+          "description": "representational convention to use in the METS; either ENMAP profile (using mets:area) or DFG profile (using only mets:structLink)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["chapter", "section", "article"],
+          "default": "article",
+          "description": "mets:div type to use for headings"
+        }
+      }
+    }
+  }
+}
