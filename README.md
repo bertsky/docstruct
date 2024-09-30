@@ -1,3 +1,5 @@
+[![Docker Image CD](https://github.com/bertsky/docstruct/actions/workflows/docker-image.yml/badge.svg)](https://github.com/bertsky/docstruct/actions/workflows/docker-image.yml)
+
 # docstruct
 
     Document structure detection from PAGE to METS
