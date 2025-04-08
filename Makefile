@@ -2,7 +2,7 @@ PYTHON = python3
 PIP = pip3
 PYTHONIOENCODING=utf8
 
-DOCKER_BASE_IMAGE = docker.io/ocrd/core:v2.69.0
+DOCKER_BASE_IMAGE = docker.io/ocrd/core:v3.3.0
 DOCKER_TAG = ocrd/docstruct
 
 help:
