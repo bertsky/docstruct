@@ -1,5 +1,5 @@
 {
-  "version": "0.0.1",
+  "version": "0.0.2",
   "git_url": "https://github.com/bertsky/docstruct",
   "tools": {
     "ocrd-docstruct": {
@@ -7,6 +7,8 @@
       "categories": ["Layout analysis"],
       "description": "Parsing page-level text regions with headings and reading order, create a dummy logical structMap",
       "steps": ["layout/analysis"],
+      "input_file_grp_cardinality": 1,
+      "output_file_grp_cardinality": 0,
       "parameters": {
         "mode": {
           "type": "string",

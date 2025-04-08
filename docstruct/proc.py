@@ -1,19 +1,18 @@
-import click
-from lxml import etree as ET
+from typing import Optional, get_args
 
-from ocrd import Processor
+from lxml import etree as ET
+import click
+
+from ocrd import Processor, Workspace
 from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
 from ocrd_utils import (
-    getLogger,
-    assert_file_grp_cardinality,
     xywh_from_points,
     xywh_from_bbox,
     bbox_from_xywh
 )
 from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import to_xml
-from ocrd_models.ocrd_mets import OcrdMets
-
+from ocrd_models.ocrd_file import OcrdFileType
+from ocrd_models.ocrd_page import OcrdPage
 from ocrd_models.ocrd_mets import OcrdMets
 from ocrd_models.constants import (
     NAMESPACES as NS,
@@ -22,39 +21,32 @@ from ocrd_models.constants import (
     TAG_METS_STRUCTMAP,
 )
 
-from .config import OCRD_TOOL
-
 # should go into ocrd_models.constants:
 TAG_METS_STRUCTLINK = '{%s}structLink' % NS['mets']
 TAG_METS_SMLINK = '{%s}smLink' % NS['mets']
 TAG_METS_AREA = '{%s}area' % NS['mets']
 TAG_METS_SEQ = '{%s}seq' % NS['mets']
 
-TOOL = 'ocrd-docstruct'
 
 class OcrdDocStruct(Processor):
+    max_workers = 1
 
-    def __init__(self, *args, **kwargs):
-        kwargs['ocrd_tool'] = OCRD_TOOL['tools'][TOOL]
-        kwargs['version'] = OCRD_TOOL['version']
-        super().__init__(*args, **kwargs)
-        self.last_result = [] 
-        self.log_links = {}
-        self.first = None
+    @property
+    def executable(self):
+        return 'ocrd-docstruct'
 
-    def create_logmap_smlink(self):
-        LOG = getLogger('OcrdDocStruct')
-        el_root = self.workspace.mets._tree.getroot()
+    def create_logmap_smlink(self, mets: OcrdMets):
+        el_root = mets._tree.getroot()
         self.log = el_root.find('mets:structMap[@TYPE="LOGICAL"]', NS)
         if self.log is None:
             self.log = ET.SubElement(el_root, TAG_METS_STRUCTMAP)
             self.log.set('TYPE', 'LOGICAL')
-            LOG.info('mets:structMap LOGICAL created')
+            self.logger.info('mets:structMap LOGICAL created')
         else:
-            LOG.warning('mets:structMap LOGICAL already exists, adding to it')
+            self.logger.warning('mets:structMap LOGICAL already exists, adding to it')
         self.log_map = {div.get('ID'): div for div in self.log.xpath('.//mets:div', namespaces=NS)}
         self.log_ids = [id_ for id_ in self.log_map.keys() if id_ and id_.startswith("LOG_")]
-        self.phy_ids = self.workspace.mets.physical_pages
+        self.phy_ids = mets.physical_pages
         self.link = el_root.find(TAG_METS_STRUCTLINK)
         if self.link is None and self.parameter['mode'] != 'enmap':
             self.link = ET.SubElement(el_root, TAG_METS_STRUCTLINK)
@@ -65,36 +57,44 @@ class OcrdDocStruct(Processor):
                 smlink_log = smlink.get('{' + NS['xlink'] + '}from')
                 self.link_map.setdefault(smlink_phy, list()).append(smlink_log)
 
-    def process(self):
+    def process_workspace(self, workspace: Workspace) -> None:
         """
         """
-        LOG = getLogger('OcrdDocStruct')
-        assert_file_grp_cardinality(self.input_file_grp, 1)
+        self.create_logmap_smlink(workspace.mets)
+        self.results = []
+        super().process_workspace(workspace)
+        self.write_to_mets()
+
+    def process_page_file(self, input_file : OcrdFileType) -> None:
+        assert isinstance(input_file, get_args(OcrdFileType))
+        page_id = input_file.pageId
+        self._base_logger.info("processing page %s", page_id)
+        self._base_logger.debug(f"parsing file {input_file.ID} for page {page_id}")
+        try:
+            input_pcgts = page_from_file(input_file)
+            assert isinstance(input_pcgts, OcrdPage)
+        except ValueError as err:
+            # not PAGE and not an image to generate PAGE for
+            self._base_logger.error(f"non-PAGE input for page {page_id}: {err}")
+            return
+
         mode = self.parameter['mode'] # enmap/mets:area or dfg/mets:structLink
         # FIXME: more parameters (what kind of region types, geometric rules etc)
 
-        self.create_logmap_smlink()
-
-        results = []
-        for input_file in self.input_files:
-            page_id = input_file.pageId or input_file.ID
-            LOG.info("INPUT FILE %s", page_id)
-            pcgts = page_from_file(self.workspace.download_file(input_file))
-            page = pcgts.get_Page()
-            if page.get_type() in ['front-cover', 'back-cover', 'title', 'blank']:
-                LOG.info("skipping page type %s", page.get_type())
-                continue
-            if page.get_type() in ['table-of-contents', 'index']:
-                # FIXME use directly
-                LOG.info("skipping page type %s", page.get_type())
-            results.extend(self.extract_text(page, input_file))
-        self.write_to_mets(results)
+        page = input_pcgts.get_Page()
+        if page.get_type() in ['front-cover', 'back-cover', 'title', 'blank']:
+            self.logger.info("skipping page type %s", page.get_type())
+            return
+        if page.get_type() in ['table-of-contents', 'index']:
+            # FIXME use directly
+            self.logger.info("skipping page type %s", page.get_type())
+            return
+        self.results.extend(self.extract_text(page, input_file))
 
     def extract_text(self, page, input_file):
         """
         get text regions in reading order, put them into a hierarchy (via heuristic rules)
         """
-        LOG = getLogger('OcrdDocStruct')
         target = self.parameter['type']
         result = []
         # FIXME: what about non-text regions (tables, images)?
@@ -119,7 +119,7 @@ class OcrdDocStruct(Processor):
             region_xywh = xywh_from_points(region.get_Coords().points)
             region_text = region.get_TextEquiv()
             if not region_text:
-                LOG.warning("skipping empty text region %s", region.id)
+                self.logger.warning("skipping empty text region %s", region.id)
                 continue
             region_text = region_text[0].Unicode
             # FIXME: textual cues
@@ -131,8 +131,7 @@ class OcrdDocStruct(Processor):
                 result.append([input_file, region.id, region_xywh, 'text', ''])
         return result
 
-    def write_to_mets(self, results):  
-        LOG = getLogger('OcrdDocStruct')
+    def write_to_mets(self):  
         mode = self.parameter['mode'] # enmap/mets:area or dfg/mets:structLink
         log_ids = sorted(int(id_[4:]) for id_ in self.log_ids
                          if id_[4:].isnumeric())
@@ -179,13 +178,13 @@ class OcrdDocStruct(Processor):
         div = None
         last_type = None
         last_page = None
-        for input_file, region_id, region_xywh, region_type, region_text in results:
+        for input_file, region_id, region_xywh, region_type, region_text in self.results:
             page_id = input_file.pageId
             if region_type == 'text':
                 if div is None:
-                    LOG.warning("%s: skipping region '%s' prior to first heading", page_id, region_id)
+                    self.logger.warning("%s: skipping region '%s' prior to first heading", page_id, region_id)
                     continue
-                LOG.info("continuing with text region %s on page %s", region_id, page_id)
+                self.logger.info("continuing with text region %s on page %s", region_id, page_id)
                 if mode == 'enmap':
                     # add to current div
                     add_area(div, input_file.ID, region_id)
@@ -199,7 +198,7 @@ class OcrdDocStruct(Processor):
                     loglist = self.link_map.get(page_id, [])
                     if len(loglist):
                         log = self.log_map[loglist[-1]]
-                        LOG.info("starting at last existing div for page: %s[%s]", log.get('ID'), log.get('TYPE'))
+                        self.logger.info("starting at last existing div for page: %s[%s]", log.get('ID'), log.get('TYPE'))
                     else:
                         # get deepest embedded, still non-structural existing div
                         log = next([log for log in reversed(self.log.iterdescendants(TAG_METS_DIV))
@@ -210,7 +209,7 @@ class OcrdDocStruct(Processor):
                                             'volume', 'monograph', # 'chapter',
                                             'letter', 'fascicle', 'fragment', 'manuscript', 'bundle',
                                     ]], self.log)
-                        LOG.info("starting at deepest existing div: %s[%s]", log.get('ID'), log.get('TYPE'))
+                        self.logger.info("starting at deepest existing div: %s[%s]", log.get('ID'), log.get('TYPE'))
                     div = log
                 div_type = div.get('TYPE').lower()
                 if (div_type in [
@@ -230,7 +229,7 @@ class OcrdDocStruct(Processor):
                 else:
                     # coordination
                     div = add_div(div.getparent(), region_type, region_text)
-                LOG.info("continuing with %s region %s on page %s", region_type, region_id, page_id)
+                self.logger.info("continuing with %s region %s on page %s", region_type, region_id, page_id)
                 if mode == 'enmap':
                     # add to new div
                     add_area(div, input_file.ID, region_id)
