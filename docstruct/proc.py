@@ -201,14 +201,14 @@ class OcrdDocStruct(Processor):
                         self.logger.info("starting at last existing div for page: %s[%s]", log.get('ID'), log.get('TYPE'))
                     else:
                         # get deepest embedded, still non-structural existing div
-                        log = next([log for log in reversed(self.log.iterdescendants(TAG_METS_DIV))
+                        log = next((log for log in reversed(list(self.log.iterdescendants(TAG_METS_DIV)))
                                     if log.get('TYPE').lower() in [
                                             # 'serial', 'multivolume_work', 'newspaper',
                                             'issue', # 'month', 'year', 
                                             'part', 'folder', 'map', 'illustration', 'additional',
                                             'volume', 'monograph', # 'chapter',
                                             'letter', 'fascicle', 'fragment', 'manuscript', 'bundle',
-                                    ]], self.log)
+                                    ]), self.log)
                         self.logger.info("starting at deepest existing div: %s[%s]", log.get('ID'), log.get('TYPE'))
                     div = log
                 div_type = div.get('TYPE').lower()
