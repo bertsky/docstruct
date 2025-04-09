@@ -1,3 +1,4 @@
+import os
 from typing import Optional, get_args
 import uuid
 
@@ -15,6 +16,7 @@ from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_file import OcrdFileType
 from ocrd_models.ocrd_page import OcrdPage
 from ocrd_models.ocrd_mets import OcrdMets
+from ocrd.mets_server import ClientSideOcrdMets
 from ocrd_models.constants import (
     NAMESPACES as NS,
     TAG_METS_DIV,
@@ -58,14 +60,38 @@ class OcrdDocStruct(Processor):
                 self.link_map.setdefault(smlink_phy, list()).append(smlink_log)
         elif self.parameter['mode'] != 'enmap':
             self.link = ET.SubElement(el_root, TAG_METS_STRUCTLINK)
+        else:
+            self.link = None
+
+    def reset(self):
+        del self.log
+        del self.log_map
+        del self.log_ids
+        del self.phy_ids
+        del self.link_map
+        del self.link
+        del self.results
 
     def process_workspace(self, workspace: Workspace) -> None:
         """
         """
-        self.create_logmap_smlink(workspace.mets)
+        if isinstance(workspace.mets, ClientSideOcrdMets):
+            # serialise and write METS to disk
+            # (in-memory changes could come from prio processing step)
+            workspace.save_mets()
+            # instantiate (read and parse) METS from disk (read-only, metadata are constant)
+            ws = Workspace(workspace.resolver, workspace.directory,
+                           mets_basename=os.path.basename(workspace.mets_target))
+        else:
+            ws = workspace
+        self.create_logmap_smlink(ws.mets)
         self.results = []
         super().process_workspace(workspace)
-        self.write_to_mets()
+        self.update_mets()
+        self.reset()
+        ws.save_mets()
+        if isinstance(workspace.mets, ClientSideOcrdMets):
+            workspace.reload_mets()
 
     def process_page_file(self, input_file : OcrdFileType) -> None:
         assert isinstance(input_file, get_args(OcrdFileType))
@@ -133,7 +159,7 @@ class OcrdDocStruct(Processor):
                 result.append([input_file, region.id, region_xywh, 'text', ''])
         return result
 
-    def write_to_mets(self):  
+    def update_mets(self):
         mode = self.parameter['mode'] # enmap/mets:area or dfg/mets:structLink
         def add_div(parent, div_type, text):
             div_id = str(uuid.uuid4())
