@@ -51,19 +51,25 @@ def get_structure(mets):
     struct = find_depth(topdiv)
     return struct
 
-def test_docstruct(processor_kwargs):
+def test_docstruct(processor_kwargs, subtests):
     ws = processor_kwargs['workspace']
     input_file_grp = processor_kwargs['input_file_grp']
     if not input_file_grp:
         pytest.skip(f"workspace asset '{ws.name}' has no PAGE GT fileGrp")
+    # for tests w/ METS Server, retrieve a new OcrdMets directly from the file
     offline_ws = Workspace(ws.resolver, ws.directory, mets_basename=os.path.basename(ws.mets_target))
     structure_old = get_structure(offline_ws.mets)
-    run_processor(OcrdDocStruct,
-                  output_file_grp="", # as long as core#1321 is open, we must something here
-                  parameter=dict(mode="enmap"),
-                  **processor_kwargs,
-    )
-    ws.save_mets()
-    offline_ws.reload_mets()
-    structure_new = get_structure(offline_ws.mets)
-    assert structure_old != structure_new
+    for mode in ['enmap', 'dfg']:
+        with subtests.test(mode=mode):
+            run_processor(OcrdDocStruct,
+                          output_file_grp="", # as long as core#1321 is open, we must something here
+                          parameter=dict(mode=mode),
+                          **processor_kwargs,
+            )
+            ws.save_mets()
+            offline_ws.reload_mets()
+            structure_new = get_structure(offline_ws.mets)
+            assert structure_old != structure_new
+        # reset mets.xml to previous state
+        offline_ws.save_mets()
+
