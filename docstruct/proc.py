@@ -1,4 +1,5 @@
 from typing import Optional, get_args
+import uuid
 
 from lxml import etree as ET
 import click
@@ -37,25 +38,26 @@ class OcrdDocStruct(Processor):
 
     def create_logmap_smlink(self, mets: OcrdMets):
         el_root = mets._tree.getroot()
-        self.log = el_root.find('mets:structMap[@TYPE="LOGICAL"]', NS)
-        if self.log is None:
-            self.log = ET.SubElement(el_root, TAG_METS_STRUCTMAP)
-            self.log.set('TYPE', 'LOGICAL')
+        if (structmap := el_root.find(TAG_METS_STRUCTMAP + '[@TYPE="LOGICAL"]')) is None:
+            structmap = ET.SubElement(el_root, TAG_METS_STRUCTMAP)
+            structmap.set('TYPE', 'LOGICAL')
             self.logger.info('mets:structMap LOGICAL created')
         else:
             self.logger.warning('mets:structMap LOGICAL already exists, adding to it')
-        self.log_map = {div.get('ID'): div for div in self.log.xpath('.//mets:div', namespaces=NS)}
-        self.log_ids = [id_ for id_ in self.log_map.keys() if id_ and id_.startswith("LOG_")]
+        self.log = structmap
+        divs = list(self.log.iterdescendants(TAG_METS_DIV))
+        self.log_map = {div.get('ID'): div for div in divs}
+        self.log_ids = [div.get('ID') for div in divs]
         self.phy_ids = mets.physical_pages
-        self.link = el_root.find(TAG_METS_STRUCTLINK)
-        if self.link is None and self.parameter['mode'] != 'enmap':
-            self.link = ET.SubElement(el_root, TAG_METS_STRUCTLINK)
         self.link_map = dict()
-        if self.link is not None:
+        if (structlink := el_root.find(TAG_METS_STRUCTLINK)) is not None:
+            self.link = structlink
             for smlink in self.link.findall(TAG_METS_SMLINK):
                 smlink_phy = smlink.get('{' + NS['xlink'] + '}to')
                 smlink_log = smlink.get('{' + NS['xlink'] + '}from')
                 self.link_map.setdefault(smlink_phy, list()).append(smlink_log)
+        elif self.parameter['mode'] != 'enmap':
+            self.link = ET.SubElement(el_root, TAG_METS_STRUCTLINK)
 
     def process_workspace(self, workspace: Workspace) -> None:
         """
@@ -133,16 +135,8 @@ class OcrdDocStruct(Processor):
 
     def write_to_mets(self):  
         mode = self.parameter['mode'] # enmap/mets:area or dfg/mets:structLink
-        log_ids = sorted(int(id_[4:]) for id_ in self.log_ids
-                         if id_[4:].isnumeric())
-        if log_ids:
-            last_id = log_ids[-1]
-        else:
-            last_id = 0
         def add_div(parent, div_type, text):
-            nonlocal last_id
-            last_id += 1
-            div_id = "LOG_" + str(last_id)
+            div_id = str(uuid.uuid4())
             div = ET.SubElement(parent, TAG_METS_DIV)
             div.set('TYPE', div_type)            
             div.set('ID', div_id)
