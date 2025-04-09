@@ -11,23 +11,20 @@ from docstruct.proc import OcrdDocStruct
 # from ocrd_pagetopdf
 def get_structure(mets):
     metsroot = mets._tree.getroot()
-    structlink = next(metsroot.iterfind('.//mets:structLink', NS), None)
+    structlink = metsroot.find('mets:structLink', NS)
     smlinks = {link.get('{http://www.w3.org/1999/xlink}from'):
                link.get('{http://www.w3.org/1999/xlink}to')
                for link in reversed(structlink.findall('./mets:smLink', NS)
-                                    if structlink else [])}
-    phymap = next(structmap for structmap in metsroot.iterfind('.//mets:structMap', NS)
-                  if structmap.get('TYPE') == 'PHYSICAL')
+                                    if structlink is not None else [])}
+    phymap = metsroot.find('mets:structMap[@TYPE="PHYSICAL"]', NS)
     topdiv = next(phymap.iterfind('./mets:div', NS))
     pages = {page.get('ID'): page.get('ORDER') or order
              for order, page in enumerate(topdiv.findall('./mets:div', NS))
              if page.get('TYPE') == "page"}
-    logmap = next((structmap for structmap in metsroot.iterfind('.//mets:structMap', NS)
-                   if structmap.get('TYPE') == 'LOGICAL'), None)
+    logmap = metsroot.find('mets:structMap[@TYPE="LOGICAL"]', NS)
     if logmap is None:
         return None
-    topdiv = next(logmap.iterfind('./mets:div', NS), None)
-    if topdiv is None:
+    if (topdiv := logmap.find('./mets:div', NS)) is None:
         return None
     # descend to deepest ADM
     while (topdiv.get('ADMID') is None and
@@ -58,7 +55,7 @@ def test_docstruct(processor_kwargs):
     ws = processor_kwargs['workspace']
     input_file_grp = processor_kwargs['input_file_grp']
     if not input_file_grp:
-        pytest.skip(f"workspace asset {ws.name} has no PAGE GT fileGrp")
+        pytest.skip(f"workspace asset '{ws.name}' has no PAGE GT fileGrp")
     offline_ws = Workspace(ws.resolver, ws.directory, mets_basename=os.path.basename(ws.mets_target))
     structure_old = get_structure(offline_ws.mets)
     run_processor(OcrdDocStruct,

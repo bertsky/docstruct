@@ -1,7 +1,7 @@
 PYTHON = python3
 PIP = pip3
 PYTHONIOENCODING=utf8
-PYTEST_ARGS ?= "-vv"
+PYTEST_ARGS ?= "-vv --workspace=all"
 
 DOCKER_BASE_IMAGE = docker.io/ocrd/core:v3.3.0
 DOCKER_TAG = ocrd/docstruct

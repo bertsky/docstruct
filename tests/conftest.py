@@ -21,7 +21,6 @@ from .assets import assets
 WORKSPACES = {
     "manifesto": assets.path_to('communist_manifesto/data/mets.xml'),
     "aufklaerung": assets.path_to('kant_aufklaerung_1784/data/mets.xml'),
-    "sbb": assets.path_to('SBB0000F29300010000/data/mets.xml'),
     "herrnhuterey04": assets.path_to('benner_herrnhuterey04_1748.ocrd/mets.xml'),
 }
 
