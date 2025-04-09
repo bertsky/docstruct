@@ -1,10 +1,12 @@
 # pylint: disable=import-error
 
 import os
+from pathlib import Path
 import pytest
 
 from ocrd import Workspace, run_processor
 from ocrd_models.constants import NAMESPACES as NS
+from ocrd_validators.xsd_mets_validator import XsdMetsValidator
 
 from docstruct.proc import OcrdDocStruct
 
@@ -59,6 +61,7 @@ def test_docstruct(processor_kwargs, subtests):
     # for tests w/ METS Server, retrieve a new OcrdMets directly from the file
     offline_ws = Workspace(ws.resolver, ws.directory, mets_basename=os.path.basename(ws.mets_target))
     structure_old = get_structure(offline_ws.mets)
+    mets_old = offline_ws.mets.to_xml(xmllint=True).decode('utf-8')
     for mode in ['enmap', 'dfg']:
         with subtests.test(mode=mode):
             run_processor(OcrdDocStruct,
@@ -70,6 +73,12 @@ def test_docstruct(processor_kwargs, subtests):
             offline_ws.reload_mets()
             structure_new = get_structure(offline_ws.mets)
             assert structure_old != structure_new
-        # reset mets.xml to previous state
-        offline_ws.save_mets()
-
+            if structure_old:
+                assert structure_old['id'] == structure_new['id']
+                assert len(structure_new['subs']) > 0
+            report = XsdMetsValidator.validate(Path(ws.mets_target))
+            assert not report.errors
+        # reset METS to previous state
+        with open(ws.mets_target, 'w') as mets_file:
+            mets_file.write(mets_old)
+        ws.reload_mets()
