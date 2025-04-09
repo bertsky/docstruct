@@ -162,7 +162,7 @@ class OcrdDocStruct(Processor):
     def update_mets(self):
         mode = self.parameter['mode'] # enmap/mets:area or dfg/mets:structLink
         def add_div(parent, div_type, text):
-            div_id = str(uuid.uuid4())
+            div_id = 'uuid-' + str(uuid.uuid4())
             div = ET.SubElement(parent, TAG_METS_DIV)
             div.set('TYPE', div_type)            
             div.set('ID', div_id)
