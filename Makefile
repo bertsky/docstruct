@@ -29,6 +29,9 @@ help:
 deps:
 	$(PIP) install -r requirements.txt
 
+deps-test:
+	$(PIP) install -r requirements-test.txt
+
 # Install Python package via pip
 install:
 	$(PIP) install .
@@ -43,6 +46,11 @@ build:
 # Run test
 test: tests/assets
 	$(PYTHON) -m pytest  tests --durations=0 $(PYTEST_ARGS)
+
+coverage:
+	coverage erase
+	$(MAKE) test PYTHON="coverage run"
+	coverage report -m
 
 #
 # Assets
@@ -74,4 +82,4 @@ docker:
 	--build-arg BUILD_DATE=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
 	-t $(DOCKER_TAG) .
 
-.PHONY: help deps install install-dev build docker
+.PHONY: help deps deps-test install install-dev build test coverage docker
