@@ -154,19 +154,17 @@ class OcrdDocStruct(Processor):
         def add_link(page_id, div_id):
             # add mets:smLink entry to mets:structLink (for dfg representation)
             link = ET.SubElement(self.link, TAG_METS_SMLINK)
-            link.set('{' + NS['xlink'] + '}to', page_id)
             link.set('{' + NS['xlink'] + '}from', div_id)
+            link.set('{' + NS['xlink'] + '}to', page_id)
             self.link_map.setdefault(page_id, []).append(div_id)
             return link
         def add_area(parent, file_id, region_id):
             # add mets:fptr/mets:area entry to mets:div (for enmap representation)
-            fptr = parent.find(TAG_METS_FPTR)
-            if fptr is None:
+            if (fptr := parent.find(TAG_METS_FPTR)) is None:
                 fptr = ET.SubElement(parent, TAG_METS_FPTR)
-            if fptr.find(TAG_METS_SEQ):
-                fptr = fptr.find(TAG_METS_SEQ)
-            elif fptr.find(TAG_METS_AREA):
-                area = fptr.find(TAG_METS_AREA)
+            if (seq := fptr.find(TAG_METS_SEQ)) is not None:
+                fptr = seq
+            elif (area := fptr.find(TAG_METS_AREA)) is not None:
                 fptr.remove(area)
                 fptr = ET.SubElement(fptr, TAG_METS_SEQ)
                 fptr.append(area)
