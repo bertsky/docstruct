@@ -1,6 +1,7 @@
 {
   "version": "0.0.2",
   "git_url": "https://github.com/bertsky/docstruct",
+  "dockerhub": "ocrd/docstruct",
   "tools": {
     "ocrd-docstruct": {
       "executable": "ocrd-docstruct",
