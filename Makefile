@@ -3,8 +3,9 @@ PIP = pip3
 PYTHONIOENCODING=utf8
 PYTEST_ARGS ?= "-vv --workspace=all"
 
-DOCKER_BASE_IMAGE = docker.io/ocrd/core:v3.3.0
-DOCKER_TAG = ocrd/docstruct
+DOCKER_BASE_IMAGE ?= docker.io/ocrd/core:latest
+DOCKER_TAG ?= ocrd/docstruct
+DOCKER ?= docker
 
 help:
 	@echo
@@ -76,7 +77,7 @@ tests/assets: repo/assets
 	$(foreach BAG,$(filter %.zip,$^),ocrd zip spill -d $@/$(basename $(BAG)) $(BAG))
 
 docker:
-	docker build \
+	$(DOCKER) build \
 	--build-arg DOCKER_BASE_IMAGE=$(DOCKER_BASE_IMAGE) \
 	--build-arg VCS_REF=$$(git rev-parse --short HEAD) \
 	--build-arg BUILD_DATE=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
