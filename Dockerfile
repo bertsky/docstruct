@@ -8,7 +8,7 @@ LABEL \
     org.label-schema.vcs-url="https://github.com/bertsky/docstruct" \
     org.label-schema.build-date=$BUILD_DATE \
     org.opencontainers.image.vendor="DFG-Funded Initiative for Optical Character Recognition Development" \
-    org.opencontainers.image.title="nmalign" \
+    org.opencontainers.image.title="docstruct" \
     org.opencontainers.image.description="Document structure detection from PAGE to METS" \
     org.opencontainers.image.source="https://github.com/bertsky/docstruct" \
     org.opencontainers.image.documentation="https://github.com/bertsky/docstruct/blob/${VCS_REF}/README.md" \
@@ -34,6 +34,8 @@ COPY . .
 COPY ocrd-tool.json .
 # prepackage ocrd-tool.json as ocrd-all-tool.json
 RUN ocrd ocrd-tool ocrd-tool.json dump-tools > $(dirname $(ocrd bashlib filename))/ocrd-all-tool.json
+# prepackage ocrd-all-module-dir.json
+RUN ocrd ocrd-tool ocrd-tool.json dump-module-dirs > $(dirname $(ocrd bashlib filename))/ocrd-all-module-dir.json
 # install everything and reduce image size
 RUN make install && rm -rf /build/docstruct
 # smoke test
